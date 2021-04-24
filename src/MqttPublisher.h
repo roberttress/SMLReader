@@ -172,7 +172,7 @@ private:
     }
     DEBUG("Publishing message to '%s' for sensor %u:", topic, sensorNo);
     DEBUG("%s\n", payload);
-    client.publish(topic, false, 2, payload);
+    client.publish(topic, false, 0, payload);
   }
 };
 
