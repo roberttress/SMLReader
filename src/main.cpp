@@ -8,7 +8,9 @@
 #include "EEPROM.h"
 #include <ESP8266WiFi.h>
 
-std::list<Sensor*> *sensors = new std::list<Sensor*>();
+using namespace std;
+
+std::list<Sensor *> *sensors = new std::list<Sensor *>();
 
 void wifiConnected();
 void configSaved();
@@ -19,7 +21,7 @@ HTTPUpdateServer httpUpdater;
 WiFiClient net;
 
 MqttConfig mqttConfig;
-MqttPublisher publisher;
+MqttPublisher publishers[NUM_OF_SENSORS];
 
 IotWebConf iotWebConf(WIFI_AP_SSID, &dnsServer, &server, WIFI_AP_DEFAULT_PASSWORD, CONFIG_VERSION);
 IotWebConfParameter params[] = {
@@ -31,22 +33,6 @@ IotWebConfParameter params[] = {
 
 boolean needReset = false;
 boolean connected = false;
-
-
-void process_message(byte *buffer, size_t len, Sensor *sensor)
-{
-	// Parse
-	sml_file *file = sml_file_parse(buffer + 8, len - 16);
-
-	DEBUG_SML_FILE(file);
-
-	if (connected) {
-		publisher.publish(sensor, file);
-	}
-
-	// free the malloc'd memory
-	sml_file_free(file);
-}
 
 void setup()
 {
@@ -60,11 +46,19 @@ void setup()
 
 	// Setup reading heads
 	DEBUG("Setting up %d configured sensors...", NUM_OF_SENSORS);
-	const SensorConfig *config  = SENSOR_CONFIGS;
+	const SensorConfig *config = SENSOR_CONFIGS;
 	for (uint8_t i = 0; i < NUM_OF_SENSORS; i++, config++)
 	{
-		Sensor *sensor = new Sensor(config, process_message);
+		Sensor *sensor = new Sensor(config, [i](byte *buffer, size_t len, Sensor *sensor) {
+			// Parse
+			sml_file *file = sml_file_parse(buffer + 8, len - 16);
+			DEBUG_SML_FILE(file);
+			publishers[i].publish(sensor, file);
+			// free the malloc'd memory
+			sml_file_free(file);
+		});
 		sensors->push_back(sensor);
+		
 	}
 	DEBUG("Sensor setup done.");
 
@@ -96,7 +90,10 @@ void setup()
 	else
 	{
 		// Setup MQTT publisher
-		publisher.setup(mqttConfig);
+		for (uint8_t i = 0; i < NUM_OF_SENSORS; i++)
+		{
+			publishers[i].setup(mqttConfig, i+1);
+		}
 	}
 
 	server.on("/", [] { iotWebConf.handleConfig(); });
@@ -107,12 +104,6 @@ void setup()
 
 void loop()
 {
-	// Publisher
-	if (connected) {
-		publisher.loop();
-		yield();
-	}
-
 	if (needReset)
 	{
 		// Doing a chip reset caused by config changes
@@ -122,7 +113,8 @@ void loop()
 	}
 
 	// Execute sensor state machines
-	for (std::list<Sensor*>::iterator it = sensors->begin(); it != sensors->end(); ++it){
+	for (std::list<Sensor *>::iterator it = sensors->begin(); it != sensors->end(); ++it)
+	{
 		(*it)->loop();
 	}
 	iotWebConf.doLoop();
@@ -138,6 +130,8 @@ void configSaved()
 void wifiConnected()
 {
 	DEBUG("WiFi connection established.");
-	connected = true;
-	publisher.connect();
+	for (uint8_t i = 0; i < NUM_OF_SENSORS; i++)
+	{
+		publishers[i].handleWiFiConnect();
+	}
 }

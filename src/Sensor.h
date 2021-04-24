@@ -50,7 +50,7 @@ class Sensor
 {
 public:
     const SensorConfig *config;
-    Sensor(const SensorConfig *config, void (*callback)(byte *buffer, size_t len, Sensor *sensor))
+    Sensor(const SensorConfig *config, function<void(byte *buffer, size_t len, Sensor *sensor)> callback)
     {
         this->config = config;
         DEBUG("Initializing sensor %s...", this->config->name);
@@ -93,7 +93,7 @@ private:
     uint8_t bytes_until_checksum = 0;
     uint8_t loop_counter = 0;
     State state = INIT;
-    void (*callback)(byte *buffer, size_t len, Sensor *sensor) = NULL;
+    function<void(byte *buffer, size_t len, Sensor *sensor)> callback;
     unique_ptr<JLed> status_led;
 
     void run_current_state()
