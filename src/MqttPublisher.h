@@ -9,11 +9,11 @@
 
 struct MqttConfig
 {
-  char server[128] = "mosquitto";
+  char server[128] = "";
   char port[8] = "1883";
   char username[128] = "";
   char password[128] = "";
-  char topic[128] = "iot/smartmeter/";
+  char topic[128] = "smartmeter/";
 };
 
 class MqttPublisher
